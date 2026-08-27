@@ -11,12 +11,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var isScanning = false
 
     /// 사용자가 설정한 연결 대상 기기 이름
-    @Published var targetDeviceName: String {
-        didSet {
-            UserDefaults.standard.set(targetDeviceName, forKey: targetDeviceNameKey)
-            log("대상 기기 이름 변경: '\(targetDeviceName)'")
-        }
-    }
+    @Published var targetDeviceName: String = ""
 
     /// 현재 연결된(또는 연결 중인) 기기 이름
     @Published var connectedDeviceName: String? = nil
@@ -34,8 +29,8 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     static let shared = BluetoothManager()
 
     private override init() {
-        targetDeviceName = UserDefaults.standard.string(forKey: "TargetDeviceName") ?? ""
         super.init()
+        targetDeviceName = UserDefaults.standard.string(forKey: targetDeviceNameKey) ?? ""
     }
 
     // MARK: - Logging
@@ -64,7 +59,11 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             self.centralManager = CBCentralManager(
                 delegate: self,
                 queue: .main,
-                options: [CBCentralManagerOptionShowPowerAlertKey: true]
+                options: [
+                    CBCentralManagerOptionShowPowerAlertKey: true,
+                    // 재부팅 후 BLE 이벤트 발생 시 iOS가 앱을 백그라운드로 자동 재시작
+                    CBCentralManagerOptionRestoreIdentifierKey: "com.bleautoconnect.central"
+                ]
             )
         }
     }

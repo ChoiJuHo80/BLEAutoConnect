@@ -202,7 +202,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(height: 130)
-                .onChange(of: bt.logMessages.count) { _ in
+                .onChange(of: bt.logMessages.count) { _, _ in
                     if let last = bt.logMessages.indices.last {
                         proxy.scrollTo(last, anchor: .bottom)
                     }
@@ -219,7 +219,9 @@ struct ContentView: View {
     // MARK: - Helpers
 
     private func saveTargetName() {
-        bt.targetDeviceName = editingText.trimmingCharacters(in: .whitespaces)
+        let name = editingText.trimmingCharacters(in: .whitespaces)
+        bt.targetDeviceName = name
+        UserDefaults.standard.set(name, forKey: "TargetDeviceName")
         isEditingName = false
     }
 
