@@ -124,6 +124,31 @@ struct ContentView: View {
                 } else {
                     Spacer()
                 }
+                
+                // 실시간 디버그 로그 섹션
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("🔍 실시간 디버그 로그")
+                        .font(.caption)
+                        .bold()
+                        .foregroundColor(.gray)
+                    
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(bluetoothManager.logMessages, id: \.self) { logMsg in
+                                Text(logMsg)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .frame(height: 120)
+                    .padding(8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 10)
             }
             .navigationTitle("BLE Auto Connect")
             .onAppear {

@@ -7,9 +7,23 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var discoveredPeripherals = [CBPeripheral]()
     @Published var savedDeviceName: String? = nil
     @Published var bluetoothStateString = "대기 중 (Initial)"
+    @Published var logMessages: [String] = ["Manager initialized"]
     
     private var centralManager: CBCentralManager?
     private var targetPeripheral: CBPeripheral?
+    
+    func log(_ message: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let timeStr = formatter.string(from: Date())
+        let logLine = "[\(timeStr)] \(message)"
+        DispatchQueue.main.async {
+            self.logMessages.append(logLine)
+            if self.logMessages.count > 12 {
+                self.logMessages.removeFirst()
+            }
+        }
+    }
     
     private let savedUUIDKey = "SavedWatchUUID"
     private let savedNameKey = "SavedWatchName"
@@ -20,9 +34,12 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     
     func setup() {
+        log("setup() 호출됨. centralManager: \(centralManager == nil ? "nil" : "존재함")")
         guard centralManager == nil else { return }
         connectionStatus = "블루투스 서비스 시작 중..."
-        centralManager = CBCentralManager(delegate: self, queue: nil)
+        log("CBCentralManager 초기화 시도 (queue: .main)...")
+        centralManager = CBCentralManager(delegate: self, queue: .main)
+        log("CBCentralManager 생성자 완료.")
     }
     
     // 주변 블루투스 기기 스캔 시작
@@ -95,6 +112,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     // 블루투스 상태 변경 감지
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        log("centralManagerDidUpdateState() 호출됨. 상태: \(central.state.rawValue)")
         isBluetoothOn = central.state == .poweredOn
         
         switch central.state {
