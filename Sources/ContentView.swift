@@ -7,24 +7,12 @@ struct ContentView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
-
-                    // ─── 1. 연결 상태 카드 ────────────────────────────
                     statusCard
-
-                    // ─── 2. 등록된 기기 / 연결 해제 ──────────────────
-                    if let name = bt.connectedDeviceName ?? bt.savedDeviceName {
-                        registeredDeviceCard(name: name)
-                    }
-
-                    // ─── 3. 스캔 버튼 ─────────────────────────────────
+                    registeredDeviceCard
                     scanButton
-
-                    // ─── 4. 발견된 기기 목록 ─────────────────────────
                     if bt.isScanning || !bt.discoveredDevices.isEmpty {
                         deviceList
                     }
-
-                    // ─── 5. 디버그 로그 ───────────────────────────────
                     debugLog
                 }
                 .padding(.vertical, 12)
@@ -43,9 +31,8 @@ struct ContentView: View {
                 if bt.connectedDeviceName != nil {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                } else if bt.isScanning {
-                    ProgressView()
-                        .scaleEffect(1.3)
+                } else if bt.connectionStatus.contains("중") || bt.connectionStatus.contains("대기") || bt.connectionStatus.contains("재연결") {
+                    ProgressView().scaleEffect(1.3)
                 } else {
                     Image(systemName: "antenna.radiowaves.left.and.right.slash")
                         .foregroundColor(.secondary)
@@ -60,7 +47,6 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            // HW 블루투스 상태 표시
             HStack(spacing: 6) {
                 Circle()
                     .fill(bt.isBluetoothOn ? Color.green : Color.red)
@@ -72,8 +58,7 @@ struct ContentView: View {
 
             if bt.bluetoothStateString.contains("Initial") || bt.bluetoothStateString.contains("Unknown") {
                 Button("수동 초기화 (Force Reset)") { bt.forceReset() }
-                    .font(.caption)
-                    .foregroundColor(.blue)
+                    .font(.caption).foregroundColor(.blue)
             }
         }
         .padding()
@@ -85,36 +70,55 @@ struct ContentView: View {
 
     // MARK: - 등록된 기기 카드
 
-    private func registeredDeviceCard(name: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: "applewatch")
-                .font(.title)
-                .foregroundColor(.blue)
+    @ViewBuilder
+    private var registeredDeviceCard: some View {
+        if let name = bt.connectedDeviceName ?? bt.savedDeviceName {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(bt.connectedDeviceName != nil ? Color.green.opacity(0.15) : Color.blue.opacity(0.1))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "applewatch")
+                        .font(.title2)
+                        .foregroundColor(bt.connectedDeviceName != nil ? .green : .blue)
+                }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.body).bold()
-                Text(bt.connectedDeviceName != nil ? "연결됨" : "범위 내 진입 시 자동 연결")
-                    .font(.caption)
-                    .foregroundColor(bt.connectedDeviceName != nil ? .green : .secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.body).bold()
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(bt.connectedDeviceName != nil ? Color.green : Color.orange)
+                            .frame(width: 6, height: 6)
+                        Text(bt.connectedDeviceName != nil
+                             ? "연결됨 (BLE)"
+                             : "자동 재연결 대기 중")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: { bt.disconnect() }) {
+                    Text("해제")
+                        .font(.footnote).bold()
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
+                }
             }
-
-            Spacer()
-
-            Button(action: { bt.disconnect() }) {
-                Text("해제")
-                    .font(.footnote).bold()
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(8)
-            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(bt.connectedDeviceName != nil ? Color.green.opacity(0.4) : Color.blue.opacity(0.2), lineWidth: 1)
+            )
+            .padding(.horizontal)
         }
-        .padding()
-        .background(Color.blue.opacity(0.06))
-        .cornerRadius(12)
-        .padding(.horizontal)
     }
 
     // MARK: - 스캔 버튼
@@ -128,15 +132,17 @@ struct ContentView: View {
                 Image(systemName: bt.isScanning ? "stop.circle.fill" : "magnifyingglass")
                 Text(bt.isScanning
                      ? "검색 중지"
-                     : (bt.savedDeviceName == nil ? "주변 기기 검색" : "다른 기기 검색"))
+                     : (bt.savedDeviceName == nil ? "주변 기기 검색" : "다른 기기로 변경"))
             }
             .font(.headline)
             .foregroundColor(.white)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(bt.isBluetoothOn
-                        ? (bt.isScanning ? Color.orange : Color.blue)
-                        : Color.gray)
+            .background(
+                bt.isBluetoothOn
+                    ? (bt.isScanning ? Color.orange : Color.blue)
+                    : Color.gray
+            )
             .cornerRadius(12)
         }
         .disabled(!bt.isBluetoothOn)
@@ -150,18 +156,15 @@ struct ContentView: View {
             HStack {
                 Text("발견된 기기")
                     .font(.subheadline).bold()
-                if bt.isScanning {
-                    ProgressView().scaleEffect(0.8)
-                }
+                if bt.isScanning { ProgressView().scaleEffect(0.8) }
                 Spacer()
                 Text("\(bt.discoveredDevices.count)개")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(.secondary)
             }
             .padding(.horizontal)
 
             if bt.discoveredDevices.isEmpty {
-                Text("주변 기기를 찾는 중...")
+                Text(bt.isScanning ? "주변 기기를 찾는 중..." : "발견된 기기가 없습니다.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -171,16 +174,21 @@ struct ContentView: View {
                     ForEach(bt.discoveredDevices) { device in
                         Button(action: { bt.selectDevice(device) }) {
                             HStack(spacing: 14) {
-                                // 신호 강도 아이콘
-                                Image(systemName: rssiIcon(device.rssi))
-                                    .foregroundColor(rssiColor(device.rssi))
-                                    .frame(width: 28)
+                                // 신호 강도 시각화
+                                VStack(spacing: 1) {
+                                    ForEach([0, 1, 2], id: \.self) { i in
+                                        RoundedRectangle(cornerRadius: 1)
+                                            .fill(signalBarColor(rssi: device.rssi, bar: i))
+                                            .frame(width: 4, height: CGFloat(4 + i * 4))
+                                    }
+                                }
+                                .frame(width: 20, height: 20, alignment: .bottom)
 
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(device.name)
                                         .font(.body).bold()
                                         .foregroundColor(.primary)
-                                    Text("신호 강도: \(device.rssi) dBm")
+                                    Text("\(device.rssi) dBm · \(signalLabel(device.rssi))")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
@@ -198,7 +206,7 @@ struct ContentView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                         }
-                        Divider().padding(.leading, 56)
+                        Divider().padding(.leading, 52)
                     }
                 }
                 .background(Color(.systemBackground))
@@ -232,7 +240,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .frame(height: 120)
+                .frame(height: 130)
                 .onChange(of: bt.logMessages.count) { _, _ in
                     if let last = bt.logMessages.indices.last {
                         proxy.scrollTo(last, anchor: .bottom)
@@ -251,21 +259,20 @@ struct ContentView: View {
 
     private var statusColor: Color {
         let s = bt.connectionStatus
-        if s.contains("연결됨") || s.contains("✅") { return .green }
-        if s.contains("중") || s.contains("대기") || s.contains("복원") { return .orange }
+        if s.contains("✅") || s.contains("연결됨") { return .green }
+        if s.contains("중") || s.contains("대기") || s.contains("재연결") { return .orange }
         return .red
     }
 
-    private func rssiIcon(_ rssi: Int) -> String {
-        if rssi >= -60 { return "wifi" }
-        if rssi >= -75 { return "wifi" }
-        if rssi >= -90 { return "wifi" }
-        return "wifi.slash"
+    private func signalBarColor(rssi: Int, bar: Int) -> Color {
+        let thresholds = [-75, -65, -50]
+        return rssi >= thresholds[bar] ? .blue : Color(.systemGray4)
     }
 
-    private func rssiColor(_ rssi: Int) -> Color {
-        if rssi >= -60 { return .green }
-        if rssi >= -75 { return .orange }
-        return .red
+    private func signalLabel(_ rssi: Int) -> String {
+        if rssi >= -50 { return "매우 강함" }
+        if rssi >= -65 { return "강함" }
+        if rssi >= -75 { return "보통" }
+        return "약함"
     }
 }
