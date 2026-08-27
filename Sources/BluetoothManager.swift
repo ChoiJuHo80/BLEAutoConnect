@@ -25,10 +25,12 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         }
     }
     
+    static let shared = BluetoothManager()
+    
     private let savedUUIDKey = "SavedWatchUUID"
     private let savedNameKey = "SavedWatchName"
     
-    override init() {
+    private override init() {
         super.init()
         savedDeviceName = UserDefaults.standard.string(forKey: savedNameKey)
     }

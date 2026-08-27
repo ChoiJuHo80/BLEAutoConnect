@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @ObservedObject private var bluetoothManager = BluetoothManager.shared
     @State private var isScanning = false
     
     var body: some View {
