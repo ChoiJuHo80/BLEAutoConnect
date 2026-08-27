@@ -15,10 +15,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     override init() {
         super.init()
-        // 앱이 꺼져 있어도 OS가 블루투스 이벤트를 감지해 백그라운드에서 깨워주도록 복원 키(RestoreIdentifier) 설정
-        centralManager = CBCentralManager(delegate: self, queue: nil, options: [
-            CBCentralManagerOptionRestoreIdentifierKey: "com.yourname.BLEAutoConnect.restore"
-        ])
+        centralManager = CBCentralManager(delegate: self, queue: nil)
         
         savedDeviceName = UserDefaults.standard.string(forKey: savedNameKey)
     }
