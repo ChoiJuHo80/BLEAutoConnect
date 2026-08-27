@@ -18,6 +18,19 @@ struct ContentView: View {
                         .foregroundColor(statusColor)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                    
+                    Divider()
+                        .padding(.horizontal, 40)
+                    
+                    HStack(spacing: 4) {
+                        Text("HW 블루투스:")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(bluetoothManager.bluetoothStateString)
+                            .font(.caption2)
+                            .bold()
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
@@ -113,6 +126,9 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("BLE Auto Connect")
+            .onAppear {
+                bluetoothManager.setup()
+            }
             .onChange(of: bluetoothManager.connectionStatus) { newStatus in
                 if newStatus.contains("Connected to") || newStatus.contains("연결됨") {
                     isScanning = false

@@ -8,7 +8,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var savedDeviceName: String? = nil
     @Published var bluetoothStateString = "대기 중 (Initial)"
     
-    private var centralManager: CBCentralManager!
+    private var centralManager: CBCentralManager?
     private var targetPeripheral: CBPeripheral?
     
     private let savedUUIDKey = "SavedWatchUUID"
@@ -16,24 +16,28 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
-        
         savedDeviceName = UserDefaults.standard.string(forKey: savedNameKey)
+    }
+    
+    func setup() {
+        guard centralManager == nil else { return }
+        connectionStatus = "블루투스 서비스 시작 중..."
+        centralManager = CBCentralManager(delegate: self, queue: nil)
     }
     
     // 주변 블루투스 기기 스캔 시작
     func startScanning() {
-        guard centralManager.state == .poweredOn else { return }
+        guard let manager = centralManager, manager.state == .poweredOn else { return }
         discoveredPeripherals.removeAll()
         connectionStatus = "주변 기기 검색 중..."
         
         // 포그라운드 상태에서는 모든 서비스를 스캔하도록 nil 설정
-        centralManager.scanForPeripherals(withServices: nil, options: nil)
+        centralManager?.scanForPeripherals(withServices: nil, options: nil)
     }
     
     // 스캔 중지
     func stopScanning() {
-        centralManager.stopScan()
+        centralManager?.stopScan()
         if targetPeripheral == nil {
             connectionStatus = "연결 해제됨"
         }
@@ -41,7 +45,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     // 특정 기기에 연결 요청 및 정보 저장
     func connect(to peripheral: CBPeripheral) {
-        centralManager.stopScan()
+        centralManager?.stopScan()
         targetPeripheral = peripheral
         targetPeripheral?.delegate = self
         connectionStatus = "\(peripheral.name ?? "기기")에 연결 중..."
@@ -51,13 +55,13 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         UserDefaults.standard.set(peripheral.name ?? "기기", forKey: savedNameKey)
         savedDeviceName = peripheral.name ?? "기기"
         
-        centralManager.connect(peripheral, options: nil)
+        centralManager?.connect(peripheral, options: nil)
     }
     
     // 기기 연동 해제
     func disconnect() {
         if let peripheral = targetPeripheral {
-            centralManager.cancelPeripheralConnection(peripheral)
+            centralManager?.cancelPeripheralConnection(peripheral)
         }
         UserDefaults.standard.removeObject(forKey: savedUUIDKey)
         UserDefaults.standard.removeObject(forKey: savedNameKey)
@@ -74,14 +78,14 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         }
         
         // 이미 저장된 UUID를 통해 기기 객체를 조회 (스캔 불필요)
-        let peripherals = centralManager.retrievePeripherals(withIdentifiers: [uuid])
+        let peripherals = centralManager?.retrievePeripherals(withIdentifiers: [uuid]) ?? []
         if let peripheral = peripherals.first {
             targetPeripheral = peripheral
             targetPeripheral?.delegate = self
             connectionStatus = "이전 등록된 기기 자동 연결 대기 중..."
             
             // 연결 대기 (Pending Connection) 시작 - 범위 내에 감지되면 OS가 자동 연결함
-            centralManager.connect(peripheral, options: nil)
+            centralManager?.connect(peripheral, options: nil)
         } else {
             connectionStatus = "이전 등록된 기기를 찾을 수 없습니다. 다시 페어링해 주세요."
         }
@@ -131,14 +135,14 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     // 연결 성공시
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         connectionStatus = "\(peripheral.name ?? "기기") 연결됨"
-        centralManager.stopScan()
+        centralManager?.stopScan()
     }
     
     // 연결 실패시 (재대기)
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         connectionStatus = "연결 실패: \(error?.localizedDescription ?? "알 수 없는 오류")"
         // 실패 시 즉시 재연결 대기 상태로 변경
-        centralManager.connect(peripheral, options: nil)
+        centralManager?.connect(peripheral, options: nil)
     }
     
     // 연결이 끊어졌을 때 (★ 핵심: 다시 백그라운드 재연결 대기 상태로 설정)
@@ -146,7 +150,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         connectionStatus = "연결 해제됨 (연결 범위 진입 시 자동 연동 대기)"
         
         // 기기가 감지되면 자동으로 연결을 진행하도록 대기 큐에 등록
-        centralManager.connect(peripheral, options: nil)
+        centralManager?.connect(peripheral, options: nil)
     }
     
     // 앱이 꺼진 후 백그라운드에서 블루투스 복원 시 처리
@@ -157,7 +161,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             self.targetPeripheral = restoredPeripheral
             self.targetPeripheral?.delegate = self
             // 복원된 기기에 연결 요청 유지
-            centralManager.connect(restoredPeripheral, options: nil)
+            centralManager?.connect(restoredPeripheral, options: nil)
         }
     }
 }
