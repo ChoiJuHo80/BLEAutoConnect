@@ -6,6 +6,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var connectionStatus = "연결 해제됨"
     @Published var discoveredPeripherals = [CBPeripheral]()
     @Published var savedDeviceName: String? = nil
+    @Published var bluetoothStateString = "대기 중 (Initial)"
     
     private var centralManager: CBCentralManager!
     private var targetPeripheral: CBPeripheral?
@@ -91,10 +92,29 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     // 블루투스 상태 변경 감지
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         isBluetoothOn = central.state == .poweredOn
-        if central.state == .poweredOn {
+        
+        switch central.state {
+        case .poweredOn:
+            bluetoothStateString = "활성화됨 (Powered On)"
             attemptAutoConnect()
-        } else {
-            connectionStatus = "블루투스가 꺼져 있습니다."
+        case .poweredOff:
+            bluetoothStateString = "비활성화됨 (Powered Off)"
+            connectionStatus = "블루투스가 꺼져 있습니다. 설정이나 제어 센터에서 블루투스를 켜주세요."
+        case .unauthorized:
+            bluetoothStateString = "권한 없음 (Unauthorized)"
+            connectionStatus = "블루투스 권한이 거부되었습니다. 아이폰 [설정] > [BLEAutoConnect]에서 블루투스 권한을 허용해주세요."
+        case .unsupported:
+            bluetoothStateString = "지원되지 않음 (Unsupported)"
+            connectionStatus = "이 기기는 블루투스를 지원하지 않습니다. (시뮬레이터 대신 실제 iOS 기기에서 실행해 주세요.)"
+        case .resetting:
+            bluetoothStateString = "재설정 중 (Resetting)"
+            connectionStatus = "블루투스 서비스가 재설정 중입니다. 잠시만 기다려주세요."
+        case .unknown:
+            bluetoothStateString = "알 수 없음 (Unknown)"
+            connectionStatus = "블루투스 상태를 초기화하는 중입니다..."
+        @unknown default:
+            bluetoothStateString = "알 수 없는 상태"
+            connectionStatus = "알 수 없는 블루투스 오류가 발생했습니다."
         }
     }
     
