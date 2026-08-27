@@ -1,186 +1,245 @@
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject private var bluetoothManager = BluetoothManager.shared
-    @State private var isScanning = false
-    
+    @ObservedObject private var bt = BluetoothManager.shared
+
+    /// 이름 설정 편집 중 여부
+    @State private var isEditingName = false
+    /// TextField 임시 값
+    @State private var editingText = ""
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                // Status Section
-                VStack(spacing: 8) {
-                    Text("연동 상태 (Connection Status)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text(bluetoothManager.connectionStatus)
-                        .font(.headline)
-                        .foregroundColor(statusColor)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    Divider()
-                        .padding(.horizontal, 40)
-                    
-                    HStack(spacing: 4) {
-                        Text("HW 블루투스:")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(bluetoothManager.bluetoothStateString)
-                            .font(.caption2)
-                            .bold()
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    if bluetoothManager.bluetoothStateString == "대기 중 (Initial)" {
-                        Button(action: {
-                            bluetoothManager.forceReset()
-                        }) {
-                            Text("수동 초기화 시도 (Force Reset)")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
-                                .underline()
-                        }
-                        .padding(.top, 2)
-                    }
+            ScrollView {
+                VStack(spacing: 16) {
+
+                    // ─── 1. 대상 기기 이름 설정 ───────────────────────
+                    targetNameSection
+
+                    // ─── 2. 연결 상태 ────────────────────────────────
+                    connectionStatusSection
+
+                    // ─── 3. 스캔 / 연결 해제 버튼 ────────────────────
+                    actionButtons
+
+                    // ─── 4. 디버그 로그 ───────────────────────────────
+                    debugLogSection
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color(.systemGray6))
-                .cornerRadius(10)
-                .padding(.horizontal)
-                
-                // Saved Device Section
-                if let savedName = bluetoothManager.savedDeviceName {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("등록된 기기 (Registered Device)")
-                            .font(.subheadline)
-                            .bold()
-                        
-                        HStack {
-                            Image(systemName: "applewatch")
-                                .font(.title)
-                                .foregroundColor(.blue)
-                            
-                            VStack(alignment: .leading) {
-                                Text(savedName)
-                                    .font(.body)
-                                    .bold()
-                                Text("범위 내 진입 시 백그라운드 자동 연결")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                bluetoothManager.disconnect()
-                            }) {
-                                Text("등록 해제")
-                                    .foregroundColor(.red)
-                                    .font(.footnote)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.red.opacity(0.1))
-                                    .cornerRadius(5)
-                            }
-                        }
-                        .padding()
-                        .background(Color.blue.opacity(0.05))
-                        .cornerRadius(10)
-                    }
-                    .padding(.horizontal)
-                }
-                
-                // Scan Toggle Button
-                Button(action: {
-                    if isScanning {
-                        bluetoothManager.stopScanning()
-                        isScanning = false
-                    } else {
-                        bluetoothManager.startScanning()
-                        isScanning = true
-                    }
-                }) {
-                    Text(isScanning ? "스캔 중지 (Stop Scanning)" : "주변 기기 검색 (Scan for Devices)")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(bluetoothManager.isBluetoothOn ? (isScanning ? Color.red : Color.blue) : Color.gray)
-                        .cornerRadius(10)
-                }
-                .disabled(!bluetoothManager.isBluetoothOn)
-                .padding(.horizontal)
-                
-                // Scan Results
-                if isScanning {
-                    List(bluetoothManager.discoveredPeripherals, id: \.identifier) { peripheral in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(peripheral.name ?? "이름 없는 기기")
-                                    .font(.body)
-                                    .bold()
-                                Text(peripheral.identifier.uuidString)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Button("연동 (Pair)") {
-                                bluetoothManager.connect(to: peripheral)
-                                isScanning = false
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
-                } else {
-                    Spacer()
-                }
-                
-                // 실시간 디버그 로그 섹션
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("🔍 실시간 디버그 로그")
-                        .font(.caption)
-                        .bold()
-                        .foregroundColor(.gray)
-                    
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(bluetoothManager.logMessages, id: \.self) { logMsg in
-                                Text(logMsg)
-                                    .font(.system(size: 9, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                    }
-                    .frame(height: 120)
-                    .padding(8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 10)
+                .padding(.vertical, 12)
             }
             .navigationTitle("BLE Auto Connect")
             .onAppear {
-                bluetoothManager.setup()
-            }
-            .onChange(of: bluetoothManager.connectionStatus) { newStatus in
-                if newStatus.contains("Connected to") || newStatus.contains("연결됨") {
-                    isScanning = false
-                }
+                bt.setup()
             }
         }
     }
-    
-    private var statusColor: Color {
-        if bluetoothManager.connectionStatus.contains("Connected") || bluetoothManager.connectionStatus.contains("연결됨") {
-            return .green
-        } else if bluetoothManager.connectionStatus.contains("Connecting") || bluetoothManager.connectionStatus.contains("연결 중") || bluetoothManager.connectionStatus.contains("Scanning") || bluetoothManager.connectionStatus.contains("스캔") {
-            return .orange
-        } else {
-            return .red
+
+    // MARK: - 대상 기기 이름 설정
+
+    private var targetNameSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("연결할 기기 이름 설정", systemImage: "pencil.circle.fill")
+                .font(.subheadline).bold()
+
+            if isEditingName {
+                HStack {
+                    TextField("예: Galaxy Watch6", text: $editingText)
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { saveTargetName() }
+
+                    Button("저장") { saveTargetName() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
+                }
+            } else {
+                HStack {
+                    if bt.targetDeviceName.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Text("설정된 기기 없음")
+                            .foregroundColor(.secondary)
+                            .italic()
+                    } else {
+                        Label(bt.targetDeviceName, systemImage: "applewatch")
+                            .font(.body).bold()
+                            .foregroundColor(.primary)
+                    }
+                    Spacer()
+                    Button("변경") {
+                        editingText = bt.targetDeviceName
+                        isEditingName = true
+                    }
+                    .font(.footnote)
+                    .foregroundColor(.blue)
+                }
+            }
+
+            if !bt.targetDeviceName.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text("이 이름을 포함한 기기가 발견되면 자동으로 연결됩니다.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    // MARK: - 연결 상태
+
+    private var connectionStatusSection: some View {
+        VStack(spacing: 10) {
+            // 연결됨 아이콘
+            if bt.connectedDeviceName != nil {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(.green)
+            } else if bt.isScanning {
+                ProgressView()
+                    .scaleEffect(1.4)
+                    .padding(.bottom, 4)
+            } else {
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(.system(size: 44))
+                    .foregroundColor(.secondary)
+            }
+
+            Text(bt.connectionStatus)
+                .font(.headline)
+                .foregroundColor(statusColor)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(bt.isBluetoothOn ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                Text("HW 블루투스: \(bt.bluetoothStateString)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            // Force Reset 버튼
+            if bt.bluetoothStateString.contains("Initial") || bt.bluetoothStateString.contains("Unknown") {
+                Button("수동 초기화 (Force Reset)") {
+                    bt.forceReset()
+                }
+                .font(.caption)
+                .foregroundColor(.blue)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+
+    // MARK: - 액션 버튼
+
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            // 스캔 시작 / 중지
+            Button(action: {
+                if bt.isScanning {
+                    bt.stopScanning()
+                } else {
+                    bt.startScanning()
+                }
+            }) {
+                HStack {
+                    Image(systemName: bt.isScanning ? "stop.circle.fill" : "magnifyingglass")
+                    Text(scanButtonLabel)
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(scanButtonColor)
+                .cornerRadius(12)
+            }
+            .disabled(!bt.isBluetoothOn)
+            .padding(.horizontal)
+
+            // 연결 해제 버튼 (연결됐을 때만)
+            if bt.connectedDeviceName != nil {
+                Button(action: { bt.disconnect() }) {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                        Text("연결 해제")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.red)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    // MARK: - 디버그 로그
+
+    private var debugLogSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("실시간 디버그 로그", systemImage: "magnifyingglass")
+                .font(.caption).bold()
+                .foregroundColor(.gray)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(bt.logMessages.enumerated()), id: \.offset) { idx, msg in
+                            Text(msg)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(idx)
+                        }
+                    }
+                }
+                .frame(height: 130)
+                .onChange(of: bt.logMessages.count) { _ in
+                    if let last = bt.logMessages.indices.last {
+                        proxy.scrollTo(last, anchor: .bottom)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: - Helpers
+
+    private func saveTargetName() {
+        bt.targetDeviceName = editingText.trimmingCharacters(in: .whitespaces)
+        isEditingName = false
+    }
+
+    private var scanButtonLabel: String {
+        if bt.isScanning {
+            return "검색 중지"
+        }
+        let name = bt.targetDeviceName.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? "주변 기기 전체 검색" : "'\(name)' 기기 검색 시작"
+    }
+
+    private var scanButtonColor: Color {
+        if !bt.isBluetoothOn { return .gray }
+        return bt.isScanning ? .orange : .blue
+    }
+
+    private var statusColor: Color {
+        let s = bt.connectionStatus
+        if s.contains("연결됨") || s.contains("✅") { return .green }
+        if s.contains("중") || s.contains("대기") { return .orange }
+        return .red
     }
 }
