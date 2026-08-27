@@ -11,6 +11,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     private var centralManager: CBCentralManager?
     private var targetPeripheral: CBPeripheral?
+    private var unknownStateRetryTimer: DispatchWorkItem?
     
     func log(_ message: String) {
         let formatter = DateFormatter()
@@ -160,6 +161,20 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         case .unknown:
             bluetoothStateString = "알 수 없음 (Unknown)"
             connectionStatus = "블루투스 상태를 초기화하는 중입니다..."
+            log("상태가 Unknown입니다. 3초 후 재시도 예약...")
+            unknownStateRetryTimer?.cancel()
+            let retryItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                if self.centralManager?.state == .unknown {
+                    self.log("Unknown 상태 지속됨. CBCentralManager 재생성 시도...")
+                    self.centralManager = nil
+                    self.centralManager = CBCentralManager(delegate: self, queue: .main, options: [
+                        CBCentralManagerOptionShowPowerAlertKey: true
+                    ])
+                }
+            }
+            unknownStateRetryTimer = retryItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: retryItem)
         @unknown default:
             bluetoothStateString = "알 수 없는 상태"
             connectionStatus = "알 수 없는 블루투스 오류가 발생했습니다."
