@@ -227,17 +227,31 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                         didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
-        let name = peripheral.name ?? ""
+        // peripheral.name 과 광고 데이터의 LocalName 둘 다 확인
+        // (갤럭시 워치는 LocalNameKey에 이름을 넣는 경우가 많음)
+        let peripheralName = peripheral.name ?? ""
+        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? ""
+        let resolvedName = peripheralName.isEmpty ? advertisedName : peripheralName
         let filter = targetDeviceName.trimmingCharacters(in: .whitespaces)
 
-        // 이름 필터가 설정된 경우: 포함 여부로 매칭 (대소문자 무시)
         if !filter.isEmpty {
-            guard name.localizedCaseInsensitiveContains(filter) else { return }
-            log("✅ 대상 기기 발견: '\(name)' (RSSI: \(RSSI)) — 자동 연결 시작")
+            let matchesPeripheral = peripheralName.localizedCaseInsensitiveContains(filter)
+            let matchesAdvertised = advertisedName.localizedCaseInsensitiveContains(filter)
+
+            // 발견된 모든 기기를 로그에 출력 (이름 확인용)
+            if !resolvedName.isEmpty {
+                log("📡 발견: '\(resolvedName)' | 필터매칭: \(matchesPeripheral || matchesAdvertised)")
+            }
+
+            guard matchesPeripheral || matchesAdvertised else { return }
+
+            log("✅ 대상 기기 발견: '\(resolvedName)' (RSSI: \(RSSI)) — 자동 연결 시작")
             connect(to: peripheral)
         } else {
-            // 필터 없을 때 전체 목록 수집 (수동 선택용)
-            log("기기 발견: '\(name.isEmpty ? "이름없음" : name)' RSSI: \(RSSI)")
+            // 필터 없을 때: 이름 있는 기기만 로그 출력
+            if !resolvedName.isEmpty {
+                log("📡 발견: '\(resolvedName)' RSSI: \(RSSI)")
+            }
         }
     }
 
