@@ -135,7 +135,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     // 앱이 꺼진 후 백그라운드에서 블루투스 복원 시 처리
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
         connectionStatus = "연결 복원 중..."
-        if let peripherals = dict[CBCentralManagerRestoredPeripheralsKey] as? [CBPeripheral],
+        if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral],
            let restoredPeripheral = peripherals.first {
             self.targetPeripheral = restoredPeripheral
             self.targetPeripheral?.delegate = self
