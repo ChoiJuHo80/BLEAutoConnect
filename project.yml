@@ -1,6 +1,7 @@
 name: BLEAutoConnect
 options:
   bundleIdPrefix: com.yourname
+  xcodeVersion: "15.0"
 targets:
   BLEAutoConnect:
     type: application
