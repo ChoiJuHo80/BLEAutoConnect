@@ -1,0 +1,14 @@
+name: BLEAutoConnect
+options:
+  bundleIdPrefix: com.yourname
+targets:
+  BLEAutoConnect:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources: [Sources]
+    info:
+      properties:
+        NSBluetoothAlwaysUsageDescription: "갤럭시 워치와의 자동 연결을 위해 블루투스 권한이 필요합니다."
+        NSBluetoothPeripheralUsageDescription: "갤럭시 워치와의 자동 연결을 위해 블루투스 권한이 필요합니다."
+        UIBackgroundModes: [bluetooth-central]
