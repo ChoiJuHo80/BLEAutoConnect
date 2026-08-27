@@ -1,0 +1,100 @@
+﻿{
+  "id": 98400843939,
+  "run_id": 33036711190,
+  "workflow_name": "Build iOS App",
+  "head_branch": "main",
+  "run_url": "https://api.github.com/repos/ChoiJuHo80/BLEAutoConnect/actions/runs/33036711190",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOUFlKA88AAAAW6SW4ow",
+  "head_sha": "a73efd5b601dbae9ce79f76160bcf01f14c417f8",
+  "url": "https://api.github.com/repos/ChoiJuHo80/BLEAutoConnect/actions/jobs/98400843939",
+  "html_url": "https://github.com/ChoiJuHo80/BLEAutoConnect/actions/runs/33036711190/job/98400843939",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-08-27T03:33:12Z",
+  "started_at": "2026-08-27T03:33:13Z",
+  "completed_at": "2026-08-27T03:33:22Z",
+  "name": "build",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-08-27T03:33:14Z",
+      "completed_at": "2026-08-27T03:33:15Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-08-27T03:33:15Z",
+      "completed_at": "2026-08-27T03:33:16Z"
+    },
+    {
+      "name": "Install XcodeGen",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-08-27T03:33:16Z",
+      "completed_at": "2026-08-27T03:33:20Z"
+    },
+    {
+      "name": "Generate Xcode Project",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 4,
+      "started_at": "2026-08-27T03:33:20Z",
+      "completed_at": "2026-08-27T03:33:20Z"
+    },
+    {
+      "name": "Build App (Unsigned)",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 5,
+      "started_at": "2026-08-27T03:33:20Z",
+      "completed_at": "2026-08-27T03:33:20Z"
+    },
+    {
+      "name": "Package as IPA",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-08-27T03:33:20Z",
+      "completed_at": "2026-08-27T03:33:20Z"
+    },
+    {
+      "name": "Upload IPA Artifact",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 7,
+      "started_at": "2026-08-27T03:33:20Z",
+      "completed_at": "2026-08-27T03:33:20Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 14,
+      "started_at": "2026-08-27T03:33:20Z",
+      "completed_at": "2026-08-27T03:33:21Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-08-27T03:33:21Z",
+      "completed_at": "2026-08-27T03:33:21Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/ChoiJuHo80/BLEAutoConnect/check-runs/98400843939",
+  "labels": [
+    "macos-14"
+  ],
+  "runner_id": 1000000270,
+  "runner_name": "GitHub Actions 1000000270",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}
