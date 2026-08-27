@@ -1,6 +1,14 @@
 import Foundation
 import CoreBluetooth
 
+// 발견된 기기 정보 (UI 표시용)
+struct DiscoveredDevice: Identifiable {
+    let id: UUID
+    let peripheral: CBPeripheral
+    let name: String
+    var rssi: Int
+}
+
 class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     // MARK: - Published State
@@ -10,11 +18,14 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     @Published var logMessages: [String] = ["Manager initialized"]
     @Published var isScanning = false
 
-    /// 사용자가 설정한 연결 대상 기기 이름
-    @Published var targetDeviceName: String = ""
+    /// 스캔 중 발견된 기기 목록 (이름 있는 것만)
+    @Published var discoveredDevices: [DiscoveredDevice] = []
 
-    /// 현재 연결된(또는 연결 중인) 기기 이름
+    /// 현재 연결된 기기 이름 (nil이면 미연결)
     @Published var connectedDeviceName: String? = nil
+
+    /// 등록된 기기 이름 (UI 표시용)
+    @Published var savedDeviceName: String? = nil
 
     // MARK: - Private
     private var centralManager: CBCentralManager?
@@ -22,15 +33,15 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     private var unknownStateRetryTimer: DispatchWorkItem?
     private var scanTimeoutTimer: DispatchWorkItem?
 
-    private let targetDeviceNameKey = "TargetDeviceName"
-    private let savedUUIDKey        = "SavedWatchUUID"
+    private let savedUUIDKey  = "SavedDeviceUUID"
+    private let savedNameKey  = "SavedDeviceName"
 
     // MARK: - Singleton
     static let shared = BluetoothManager()
 
     private override init() {
         super.init()
-        targetDeviceName = UserDefaults.standard.string(forKey: targetDeviceNameKey) ?? ""
+        savedDeviceName = UserDefaults.standard.string(forKey: savedNameKey)
     }
 
     // MARK: - Logging
@@ -61,7 +72,6 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 queue: .main,
                 options: [
                     CBCentralManagerOptionShowPowerAlertKey: true,
-                    // 재부팅 후 BLE 이벤트 발생 시 iOS가 앱을 백그라운드로 자동 재시작
                     CBCentralManagerOptionRestoreIdentifierKey: "com.bleautoconnect.central"
                 ]
             )
@@ -79,22 +89,15 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
 
     // MARK: - Scanning
 
-    /// 대상 기기 이름으로 스캔 시작 (이름이 비어있으면 전체 스캔)
     func startScanning() {
         guard let manager = centralManager, manager.state == .poweredOn else {
             log("스캔 불가: BT 상태 = \(centralManager?.state.rawValue ?? -1)")
             return
         }
-
+        discoveredDevices.removeAll()
         isScanning = true
-        let nameFilter = targetDeviceName.trimmingCharacters(in: .whitespaces)
-        if nameFilter.isEmpty {
-            connectionStatus = "주변 기기 검색 중... (전체)"
-            log("스캔 시작 — 이름 필터 없음 (전체 기기)")
-        } else {
-            connectionStatus = "'\(nameFilter)' 기기 검색 중..."
-            log("스캔 시작 — 필터: '\(nameFilter)'")
-        }
+        connectionStatus = "주변 기기 검색 중..."
+        log("스캔 시작 (30초)")
 
         centralManager?.scanForPeripherals(withServices: nil, options: [
             CBCentralManagerScanOptionAllowDuplicatesKey: false
@@ -104,9 +107,13 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         scanTimeoutTimer?.cancel()
         let timeoutItem = DispatchWorkItem { [weak self] in
             guard let self = self, self.isScanning else { return }
-            self.log("30초 타임아웃 — 기기를 찾지 못했습니다.")
+            self.log("30초 타임아웃 — 스캔 종료. 발견 \(self.discoveredDevices.count)개")
             self.stopScanning()
-            self.connectionStatus = "'\(self.targetDeviceName)' 기기를 찾지 못했습니다. 워치의 블루투스를 확인해주세요."
+            if self.discoveredDevices.isEmpty {
+                self.connectionStatus = "주변에 기기가 없습니다."
+            } else {
+                self.connectionStatus = "검색 완료. 기기를 선택하세요."
+            }
         }
         scanTimeoutTimer = timeoutItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 30.0, execute: timeoutItem)
@@ -117,21 +124,24 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         scanTimeoutTimer = nil
         centralManager?.stopScan()
         isScanning = false
-        log("스캔 중지됨.")
+        log("스캔 중지.")
     }
 
     // MARK: - Connection
 
-    func connect(to peripheral: CBPeripheral) {
+    /// 목록에서 기기 선택 시 호출
+    func selectDevice(_ device: DiscoveredDevice) {
         stopScanning()
+        let peripheral = device.peripheral
         targetPeripheral = peripheral
         targetPeripheral?.delegate = self
-        let name = peripheral.name ?? "기기"
-        connectionStatus = "'\(name)'에 연결 중..."
-        log("연결 시도: \(name)")
+        connectionStatus = "'\(device.name)'에 연결 중..."
+        log("연결 시도: \(device.name)")
 
-        // UUID 저장 (재연결용)
+        // UUID + 이름 저장 (다음 실행 시 자동 재연결용)
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: savedUUIDKey)
+        UserDefaults.standard.set(device.name, forKey: savedNameKey)
+        savedDeviceName = device.name
 
         centralManager?.connect(peripheral, options: nil)
     }
@@ -140,24 +150,33 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func attemptReconnectByUUID() {
         guard let uuidString = UserDefaults.standard.string(forKey: savedUUIDKey),
               let uuid = UUID(uuidString: uuidString) else {
-            // UUID 없으면 이름으로 스캔 시작
-            if !targetDeviceName.trimmingCharacters(in: .whitespaces).isEmpty {
-                log("저장된 UUID 없음. 이름 스캔으로 전환.")
-                startScanning()
-            }
+            log("저장된 기기 없음. 수동 검색 필요.")
+            connectionStatus = "등록된 기기가 없습니다. 검색 후 선택해주세요."
             return
         }
 
         let peripherals = centralManager?.retrievePeripherals(withIdentifiers: [uuid]) ?? []
         if let peripheral = peripherals.first {
-            log("저장된 UUID로 재연결 시도: \(peripheral.name ?? uuid.uuidString)")
+            let name = UserDefaults.standard.string(forKey: savedNameKey) ?? "기기"
+            log("저장된 기기 재연결 시도: \(name)")
             targetPeripheral = peripheral
             targetPeripheral?.delegate = self
-            connectionStatus = "이전 기기 자동 재연결 중..."
+            connectionStatus = "'\(name)' 자동 재연결 중..."
             centralManager?.connect(peripheral, options: nil)
         } else {
-            log("저장된 UUID 기기 없음. 이름 스캔으로 전환.")
-            startScanning()
+            log("저장된 UUID 기기 없음. 범위 밖일 수 있음.")
+            connectionStatus = "'\(savedDeviceName ?? "기기")'을 찾는 중... (범위 내 진입 대기)"
+            // UUID로 pending connection 등록 — 범위 내 오면 자동 연결
+            if let uuidString = UserDefaults.standard.string(forKey: savedUUIDKey),
+               let uuid = UUID(uuidString: uuidString) {
+                // retrieveConnectedPeripherals로도 한 번 더 시도
+                let connected = centralManager?.retrieveConnectedPeripherals(withServices: []) ?? []
+                if let p = connected.first(where: { $0.identifier == uuid }) {
+                    targetPeripheral = p
+                    targetPeripheral?.delegate = self
+                    centralManager?.connect(p, options: nil)
+                }
+            }
         }
     }
 
@@ -166,8 +185,10 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
             centralManager?.cancelPeripheralConnection(peripheral)
         }
         UserDefaults.standard.removeObject(forKey: savedUUIDKey)
+        UserDefaults.standard.removeObject(forKey: savedNameKey)
         targetPeripheral = nil
         connectedDeviceName = nil
+        savedDeviceName = nil
         connectionStatus = "연결 해제됨"
         log("수동 연결 해제.")
     }
@@ -175,13 +196,12 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     // MARK: - CBCentralManagerDelegate
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        log("BT 상태 변경: \(central.state.rawValue)")
+        log("BT 상태: \(central.state.rawValue)")
         isBluetoothOn = central.state == .poweredOn
 
         switch central.state {
         case .poweredOn:
             bluetoothStateString = "활성화됨 (Powered On)"
-            // 앱 시작 시 자동 재연결 시도
             attemptReconnectByUUID()
 
         case .poweredOff:
@@ -203,15 +223,18 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         case .unknown:
             bluetoothStateString = "알 수 없음 (Unknown)"
             connectionStatus = "블루투스 초기화 중..."
-            log("Unknown 상태. 3초 후 재시도 예약.")
+            log("Unknown 상태. 3초 후 재시도.")
             unknownStateRetryTimer?.cancel()
             let retryItem = DispatchWorkItem { [weak self] in
                 guard let self = self, self.centralManager?.state == .unknown else { return }
-                self.log("Unknown 상태 지속. CBCentralManager 재생성.")
+                self.log("Unknown 지속. CBCentralManager 재생성.")
                 self.centralManager = nil
                 self.centralManager = CBCentralManager(
                     delegate: self, queue: .main,
-                    options: [CBCentralManagerOptionShowPowerAlertKey: true]
+                    options: [
+                        CBCentralManagerOptionShowPowerAlertKey: true,
+                        CBCentralManagerOptionRestoreIdentifierKey: "com.bleautoconnect.central"
+                    ]
                 )
             }
             unknownStateRetryTimer = retryItem
@@ -227,56 +250,57 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                         didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
-        // peripheral.name 과 광고 데이터의 LocalName 둘 다 확인
-        // (갤럭시 워치는 LocalNameKey에 이름을 넣는 경우가 많음)
+        // peripheral.name 과 광고 데이터 LocalName 둘 다 확인
         let peripheralName = peripheral.name ?? ""
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? ""
         let resolvedName = peripheralName.isEmpty ? advertisedName : peripheralName
-        let filter = targetDeviceName.trimmingCharacters(in: .whitespaces)
 
-        if !filter.isEmpty {
-            let matchesPeripheral = peripheralName.localizedCaseInsensitiveContains(filter)
-            let matchesAdvertised = advertisedName.localizedCaseInsensitiveContains(filter)
+        // 이름 없는 기기는 목록에서 제외
+        guard !resolvedName.isEmpty else { return }
 
-            // 발견된 모든 기기를 로그에 출력 (이름 확인용)
-            if !resolvedName.isEmpty {
-                log("📡 발견: '\(resolvedName)' | 필터매칭: \(matchesPeripheral || matchesAdvertised)")
-            }
-
-            guard matchesPeripheral || matchesAdvertised else { return }
-
-            log("✅ 대상 기기 발견: '\(resolvedName)' (RSSI: \(RSSI)) — 자동 연결 시작")
-            connect(to: peripheral)
+        let rssiValue = RSSI.intValue
+        if let idx = discoveredDevices.firstIndex(where: { $0.id == peripheral.identifier }) {
+            // 이미 있으면 RSSI만 업데이트
+            discoveredDevices[idx].rssi = rssiValue
         } else {
-            // 필터 없을 때: 이름 있는 기기만 로그 출력
-            if !resolvedName.isEmpty {
-                log("📡 발견: '\(resolvedName)' RSSI: \(RSSI)")
-            }
+            log("📡 발견: '\(resolvedName)' (RSSI: \(rssiValue))")
+            let device = DiscoveredDevice(
+                id: peripheral.identifier,
+                peripheral: peripheral,
+                name: resolvedName,
+                rssi: rssiValue
+            )
+            discoveredDevices.append(device)
+            // RSSI 강한 순으로 정렬
+            discoveredDevices.sort { $0.rssi > $1.rssi }
         }
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        let name = peripheral.name ?? "기기"
+        let name = peripheral.name
+            ?? UserDefaults.standard.string(forKey: savedNameKey)
+            ?? "기기"
         connectedDeviceName = name
         connectionStatus = "✅ '\(name)' 연결됨"
         isScanning = false
+        discoveredDevices.removeAll()
         log("연결 성공: \(name)")
         centralManager?.stopScan()
     }
 
     func centralManager(_ central: CBCentralManager,
                         didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        log("연결 실패: \(error?.localizedDescription ?? "알 수 없는 오류") — 재시도 중...")
+        log("연결 실패: \(error?.localizedDescription ?? "알 수 없는 오류") — 재시도")
         connectionStatus = "연결 실패. 재시도 중..."
         centralManager?.connect(peripheral, options: nil)
     }
 
     func centralManager(_ central: CBCentralManager,
                         didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        log("연결 끊김: \(peripheral.name ?? "기기"). 자동 재연결 대기 중...")
+        let name = UserDefaults.standard.string(forKey: savedNameKey) ?? "기기"
+        log("연결 끊김: \(name). 재연결 대기 중...")
         connectedDeviceName = nil
-        connectionStatus = "연결 끊김 — 범위 내 진입 시 자동 재연결"
-        // 범위 안에 오면 OS가 자동으로 연결해줌
+        connectionStatus = "'\(name)' 연결 끊김 — 범위 내 진입 시 자동 재연결"
         centralManager?.connect(peripheral, options: nil)
     }
 
