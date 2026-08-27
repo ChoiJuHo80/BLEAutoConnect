@@ -38,10 +38,24 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     func setup() {
         log("setup() 호출됨. centralManager: \(centralManager == nil ? "nil" : "존재함")")
         guard centralManager == nil else { return }
-        connectionStatus = "블루투스 서비스 시작 중..."
-        log("CBCentralManager 초기화 시도 (queue: .main)...")
-        centralManager = CBCentralManager(delegate: self, queue: .main)
-        log("CBCentralManager 생성자 완료.")
+        connectionStatus = "블루투스 서비스 시작 대기 중..."
+        
+        // 앱이 완전히 활성화(Foreground Active)된 상태에서 팝업을 띄우기 위해 1.5초 지연
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self else { return }
+            self.log("1.5초 지연 후 CBCentralManager 초기화 시도...")
+            self.connectionStatus = "블루투스 서비스 시작 중..."
+            self.centralManager = CBCentralManager(delegate: self, queue: .main, options: [
+                CBCentralManagerOptionShowPowerAlertKey: true
+            ])
+            self.log("CBCentralManager 생성 완료.")
+        }
+    }
+    
+    func forceReset() {
+        log("forceReset() 호출됨. 강제 재설정 중...")
+        centralManager = nil
+        setup()
     }
     
     // 주변 블루투스 기기 스캔 시작

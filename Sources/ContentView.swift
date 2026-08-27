@@ -31,6 +31,18 @@ struct ContentView: View {
                             .bold()
                             .foregroundColor(.secondary)
                     }
+                    
+                    if bluetoothManager.bluetoothStateString == "대기 중 (Initial)" {
+                        Button(action: {
+                            bluetoothManager.forceReset()
+                        }) {
+                            Text("수동 초기화 시도 (Force Reset)")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                                .underline()
+                        }
+                        .padding(.top, 2)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
