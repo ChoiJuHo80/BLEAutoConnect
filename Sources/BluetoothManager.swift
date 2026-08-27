@@ -37,6 +37,13 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     func setup() {
         log("setup() 호출됨. centralManager: \(centralManager == nil ? "nil" : "존재함")")
+        
+        // Info.plist 권한 설정 검증 로그 추가
+        let alwaysDesc = Bundle.main.object(forInfoDictionaryKey: "NSBluetoothAlwaysUsageDescription") as? String
+        let peripheralDesc = Bundle.main.object(forInfoDictionaryKey: "NSBluetoothPeripheralUsageDescription") as? String
+        log("Always 권한설명: \(alwaysDesc ?? "없음 (nil)")")
+        log("Peripheral 권한설명: \(peripheralDesc ?? "없음 (nil)")")
+        
         guard centralManager == nil else { return }
         connectionStatus = "블루투스 서비스 시작 대기 중..."
         
@@ -49,6 +56,9 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
                 CBCentralManagerOptionShowPowerAlertKey: true
             ])
             self.log("CBCentralManager 생성 완료.")
+            if let state = self.centralManager?.state {
+                self.log("매니저 초기 상태값: \(state.rawValue)")
+            }
         }
     }
     
